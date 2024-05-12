@@ -1,0 +1,67 @@
+version: "3.9"
+
+volumes:
+  redis-db:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DIR_PATH_HOST}/redis/data
+  postgres-db:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DIR_PATH_HOST}/postgres/data
+
+secrets:
+  # echo ${POSTGRES_USER} | docker secret create postgres-root-user -
+  postgres-root-user:
+    file: ${DIR_PATH_HOST}/postgres/secrets/root_user.txt
+  # echo ${POSTGRES_PASSWORD} | docker secret create postgres-root-password -
+  postgres-root-password:
+    file: ${DIR_PATH_HOST}/postgres/secrets/root_password.txt
+
+services:
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT}:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis-db:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    container_name: postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    secrets:
+      - postgres-root-user
+      - postgres-root-password
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER_FILE: /run/secrets/postgres-root-user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-root-password
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 20s
+      timeout: 5s
+      retries: 5

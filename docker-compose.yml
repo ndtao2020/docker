@@ -66,34 +66,39 @@ services:
       timeout: 5s
       retries: 5
 
-  helloworld:
-    container_name: helloworld
+  frontend:
+    container_name: frontend
     image: crccheck/hello-world
     ports:
       - 8000:8000
 
-  # step 2: docker compose up -d helloworld nginx
+  # step 2: docker compose up -d frontend nginx
+  # step 6: docker compose up -d nginx
   nginx:
     container_name: nginx
-    restart: unless-stopped
-    image: nginx:stable
+    depends_on:
+      - frontend
+    build: ./nginx
     ports:
       - 80:80
       - 443:443
     environment:
-      HOST_DOMAIN: ${HOST_DOMAIN}
+      NGINX_HOST: ${HOST_DOMAIN}
+      FRONTEND_HOST: frontend
+      FRONTEND_PORT: 8000
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
 
   # step 3: docker compose up -d certbot
   # step 4: docker logs certbot
-  # step 6: crontab -e
-  # step 7: 0 5 1 */2 * /usr/bin/docker compose -f ${DIR_PATH_HOST}/docker-compose.yml up certbot
+  # step 7: crontab -e
+  # step 8: 0 5 1 */2 * /usr/bin/docker compose -f ${DIR_PATH_HOST}/docker-compose.yml up certbot
   certbot:
-    image: certbot/certbot
     container_name: certbot
+    depends_on:
+      - nginx
+    image: certbot/certbot
     volumes: 
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot

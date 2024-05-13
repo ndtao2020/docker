@@ -6,6 +6,7 @@
 # vagrant ssh
 # vagrant destroy
 # vagrant box remove generic/ubuntu2204
+# vagrant up --provider=vmware_desktop
 
 # All Vagrant configuration is done below. The "2" in Vagrant.configure
 # configures the configuration version (we support older styles for
@@ -69,15 +70,17 @@ Vagrant.configure("2") do |config|
   #   # Customize the amount of memory on the VM:
   #   vb.memory = "1024"
   # end
-  #
-  # View the documentation for the provider you are using for more
-  # information on available options.
 
   # Enable provisioning with a shell script. Additional provisioners such as
   # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
   # documentation for more information about their specific syntax and use.
-  # config.vm.provision :shell, path: "../ubuntu/init.sh"
+  # Generate a Random String: https://www.baeldung.com/linux/generate-random-string-using-random
   config.vm.provision "shell", inline: <<-SHELL
-    apt-get update -y
+    apt install curl -y
+    curl -O https://raw.githubusercontent.com/ndtao2020/docker/main/ubuntu/init.sh
+    chmod +x init.sh
+    RPASS=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+    ./init.sh $RPASS
+    echo "generated password: $RPASS"
   SHELL
 end

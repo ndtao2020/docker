@@ -12,7 +12,7 @@ set -e
 SSH_DIR="$HOME/.ssh"
 [ -z "$1" ] && abort "[!] Missing Passphare"
 echo "[+] Generating Key In: $SSH_DIR/id_ed25519"
-sudo ssh-keygen -t ed25519 -f -f "$SSH_DIR/id_ed25519" -P $1
+sudo ssh-keygen -t ed25519 -f "$SSH_DIR/id_ed25519" -P $1
 
 PRIKEY=`cat ~/.ssh/id_ed25519`
 PUBKEY=`cat ~/.ssh/id_ed25519.pub`

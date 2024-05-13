@@ -17,10 +17,10 @@ volumes:
 secrets:
   # echo ${POSTGRES_USER} | docker secret create postgres-root-user -
   postgres-root-user:
-    file: ${DIR_PATH_HOST}/postgres/secrets/root_user.txt
+    file: ./postgres/secrets/root_user.txt
   # echo ${POSTGRES_PASSWORD} | docker secret create postgres-root-password -
   postgres-root-password:
-    file: ${DIR_PATH_HOST}/postgres/secrets/root_password.txt
+    file: ./postgres/secrets/root_password.txt
 
 services:
   redis:
@@ -65,3 +65,36 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+
+  helloworld:
+    container_name: helloworld
+    image: crccheck/hello-world
+    ports:
+      - 8000:8000
+
+  # step 2: docker compose up -d helloworld nginx
+  nginx:
+    container_name: nginx
+    restart: unless-stopped
+    image: nginx:stable
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      HOST_DOMAIN: ${HOST_DOMAIN}
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+
+  # step 3: docker compose up -d certbot
+  # step 4: docker logs certbot
+  # step 6: crontab -e
+  # step 7: 0 5 1 */2 * /usr/bin/docker compose -f ${DIR_PATH_HOST}/docker-compose.yml up certbot
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes: 
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email ${HOST_CERTBOT_EMAIL} -d ${HOST_DOMAIN} --agree-tos

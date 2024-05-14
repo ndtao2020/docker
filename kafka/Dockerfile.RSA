@@ -8,7 +8,7 @@ RUN apk upgrade --update-cache --available && \
 ARG KAFKA_SSL_HOSTNAME
 ARG KAFKA_SSL_PASSWORD
 
-ENV ALGORITHM=EC
+ENV ALGORITHM=RSA
 ENV ALIAS=CARoot
 ENV VALIDITY_IN_DAYS=3650
 ENV COUNTRY=VN
@@ -27,17 +27,14 @@ WORKDIR /app
 # https://docs.confluent.io/platform/current/kafka/encryption.html
 # https://docs.confluent.io/platform/current/kafka/authentication_ssl.html#kafka-ssl-authentication
 # https://learn.microsoft.com/en-us/azure/hdinsight/kafka/apache-kafka-ssl-encryption-authentication
-# list of possible curve names
-# RUN openssl ecparam -list_curves
 # Create own private Certificate Authority (CA)
-RUN openssl ecparam -name secp521r1 -genkey -noout -out private-key.pem
-RUN openssl ec -in private-key.pem -pubout -out public-key.pem
-RUN openssl req -new -x509 \
-    -key private-key.pem \
-    -out ca-cert \
-    -days $VALIDITY_IN_DAYS \
-    -subj "/C=$COUNTRY/ST=$STATE/L=$LOCATION/O=$OU/OU=$OO/CN=$CN" \
-    -passin pass:$KAFKA_SSL_PASSWORD
+RUN openssl req -new -nodes \
+   -x509 \
+   -days $VALIDITY_IN_DAYS \
+   -newkey rsa:2048 \
+   -keyout ca-key \
+   -out ca-cert \
+   -subj "/C=$COUNTRY/ST=$STATE/L=$LOCATION/O=$OU/OU=$OO/CN=$CN" -passin pass:$KAFKA_SSL_PASSWORD
 # Create Kafka Server Certificate and store in KeyStore
 RUN keytool -genkey \
     -keystore $KAFKA_SSL_KEYSTORE_FILE \
@@ -48,21 +45,13 @@ RUN keytool -genkey \
     -keypass $KAFKA_SSL_PASSWORD \
     -storetype pkcs12
 # Create Certificate signed request (CSR)
-RUN keytool \
-    -keystore $KAFKA_SSL_KEYSTORE_FILE \
+RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE \
     -keyalg $ALGORITHM \
     -certreq -file cert-file \
     -storepass $KAFKA_SSL_PASSWORD \
     -keypass $KAFKA_SSL_PASSWORD
 # Get CSR Signed with the CA
-RUN openssl x509 -req \
-    -CA ca-cert \
-    -CAkey private-key.pem \
-    -in cert-file \
-    -out cert-file-signed \
-    -days $VALIDITY_IN_DAYS \
-    -CAcreateserial \
-    -passin pass:$KAFKA_SSL_PASSWORD
+RUN openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-file-signed -days $VALIDITY_IN_DAYS -CAcreateserial -passin pass:$KAFKA_SSL_PASSWORD
 # Import CA certificate in KeyStore
 RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE -alias $ALIAS -import -file ca-cert -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD -noprompt
 # Import Signed CSR In KeyStore

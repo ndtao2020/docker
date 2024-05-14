@@ -1,4 +1,4 @@
-FROM openjdk:17-alpine as builder
+FROM eclipse-temurin:21-alpine as builder
 
 # install OpenSSL
 RUN apk upgrade --update-cache --available && \
@@ -8,10 +8,13 @@ RUN apk upgrade --update-cache --available && \
 ARG KAFKA_SSL_HOSTNAME
 ARG KAFKA_SSL_PASSWORD
 
+ENV ALGORITHM=RSA
+ENV ALIAS=CARoot
 ENV VALIDITY_IN_DAYS=3650
 ENV COUNTRY=VN
 ENV STATE=BinhDinh
 ENV OU=ndtao2020
+ENV OO=taoqn
 ENV CN=${KAFKA_SSL_HOSTNAME}
 ENV LOCATION=QuyNhon
 ENV KAFKA_SSL_PASSWORD=${KAFKA_SSL_PASSWORD}
@@ -31,26 +34,30 @@ RUN openssl req -new -nodes \
    -newkey rsa:2048 \
    -keyout ca-key \
    -out ca-cert \
-   -subj "/C=$COUNTRY/ST=$STATE/L=$LOCATION/O=$OU/CN=$CN" -passin pass:$KAFKA_SSL_PASSWORD
+   -subj "/C=$COUNTRY/ST=$STATE/L=$LOCATION/O=$OU/OU=$OO/CN=$CN" -passin pass:$KAFKA_SSL_PASSWORD
 # Create Kafka Server Certificate and store in KeyStore
 RUN keytool -genkey \
     -keystore $KAFKA_SSL_KEYSTORE_FILE \
-    -keyalg RSA \
+    -keyalg $ALGORITHM \
     -validity $VALIDITY_IN_DAYS \
-    -dname "C=$COUNTRY, ST=$STATE, L=$LOCATION, O=$OU, CN=$CN" \
+    -dname "C=$COUNTRY, ST=$STATE, L=$LOCATION, O=$OU, OU=$OO, CN=$CN" \
     -storepass $KAFKA_SSL_PASSWORD \
     -keypass $KAFKA_SSL_PASSWORD \
     -storetype pkcs12
 # Create Certificate signed request (CSR)
-RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE -keyalg RSA -certreq -file cert-file -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD
+RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE \
+    -keyalg $ALGORITHM \
+    -certreq -file cert-file \
+    -storepass $KAFKA_SSL_PASSWORD \
+    -keypass $KAFKA_SSL_PASSWORD
 # Get CSR Signed with the CA
 RUN openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-file-signed -days $VALIDITY_IN_DAYS -CAcreateserial -passin pass:$KAFKA_SSL_PASSWORD
 # Import CA certificate in KeyStore
-RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE -alias CARoot -import -file ca-cert -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD -noprompt
+RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE -alias $ALIAS -import -file ca-cert -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD -noprompt
 # Import Signed CSR In KeyStore
 RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE -import -file cert-file-signed -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD -noprompt
 # Import CA certificate In TrustStore
-RUN keytool -keystore $KAFKA_SSL_TRUSTSTORE_FILE -alias CARoot -import -file ca-cert -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD -noprompt
+RUN keytool -keystore $KAFKA_SSL_TRUSTSTORE_FILE -alias $ALIAS -import -file ca-cert -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD -noprompt
 
 FROM apache/kafka:latest
 

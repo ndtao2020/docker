@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3'
 
 volumes:
   redis-db:
@@ -13,14 +13,30 @@ volumes:
       type: none
       o: bind
       device: ${DIR_PATH_HOST}/postgres/data
-
-secrets:
-  # echo ${POSTGRES_USER} | docker secret create postgres-root-user -
-  postgres-root-user:
-    file: ./postgres/secrets/root_user.txt
-  # echo ${POSTGRES_PASSWORD} | docker secret create postgres-root-password -
-  postgres-root-password:
-    file: ./postgres/secrets/root_password.txt
+  kafka-secrets:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DIR_PATH_HOST}/kafka/secrets
+  nginx-conf:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DIR_PATH_HOST}/nginx
+  certbot-conf:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DIR_PATH_HOST}/certbot/conf
+  certbot-www:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DIR_PATH_HOST}/certbot/www
 
 services:
   redis:
@@ -46,9 +62,6 @@ services:
     container_name: postgres
     image: postgres:16-alpine
     restart: unless-stopped
-    secrets:
-      - postgres-root-user
-      - postgres-root-password
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
@@ -66,16 +79,126 @@ services:
       timeout: 5s
       retries: 5
 
+  # =========================== [KAFKA-CLUSTER] ===========================
+  kafka-1:
+    # image: apache/kafka:latest
+    hostname: kafka-1
+    container_name: kafka-1
+    build:
+      context: ./kafka
+      dockerfile: Dockerfile
+      args:
+        KAFKA_SSL_HOSTNAME: ${HOST_DOMAIN}:${KAFKA_PORT}
+        KAFKA_SSL_PASSWORD: ${KAFKA_PASSWORD}
+    ports:
+      - 29093:9093
+    volumes:
+      - kafka-secrets:/etc/kafka/secrets
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'SSL:SSL,CONTROLLER:PLAINTEXT,SSL-INTERNAL:SSL'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:29092,2@kafka-2:29092,3@kafka-3:29092'
+      KAFKA_LISTENERS: 'SSL-INTERNAL://:19093,CONTROLLER://kafka-1:29092,SSL://:9093'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
+      KAFKA_SECURITY_PROTOCOL: SSL
+      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-1:19093,SSL://localhost:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
+      KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
+      KAFKA_SSL_CLIENT_AUTH: 'required'
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
+
+  kafka-2:
+    image: apache/kafka:latest
+    hostname: kafka-2
+    container_name: kafka-2
+    depends_on:
+      - kafka-1
+    ports:
+      - 39093:9093
+    volumes:
+      - kafka-secrets:/etc/kafka/secrets
+    environment:
+      KAFKA_NODE_ID: 2
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'SSL:SSL,CONTROLLER:PLAINTEXT,SSL-INTERNAL:SSL'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:29092,2@kafka-2:29092,3@kafka-3:29092'
+      KAFKA_LISTENERS: 'SSL-INTERNAL://:19093,CONTROLLER://kafka-2:29092,SSL://:9093'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
+      KAFKA_SECURITY_PROTOCOL: SSL
+      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-2:19093,SSL://localhost:39093
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
+      KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
+      KAFKA_SSL_CLIENT_AUTH: 'required'
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
+
+  kafka-3:
+    image: apache/kafka:latest
+    hostname: kafka-3
+    container_name: kafka-3
+    depends_on:
+      - kafka-1
+    ports:
+      - 49093:9093
+    volumes:
+      - kafka-secrets:/etc/kafka/secrets
+    environment:
+      KAFKA_NODE_ID: 3
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'SSL:SSL,CONTROLLER:PLAINTEXT,SSL-INTERNAL:SSL'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:29092,2@kafka-2:29092,3@kafka-3:29092'
+      KAFKA_LISTENERS: 'SSL-INTERNAL://:19093,CONTROLLER://kafka-3:29092,SSL://:9093'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
+      KAFKA_SECURITY_PROTOCOL: SSL
+      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-3:19093,SSL://localhost:49093
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
+      KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
+      KAFKA_SSL_CLIENT_AUTH: 'required'
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
+
+  # =========================== [WEB] ===========================
   frontend:
     container_name: frontend
+    restart: unless-stopped
     image: crccheck/hello-world
     ports:
       - 8000:8000
 
-  # step 2: docker compose up -d frontend nginx
-  # step 6: docker compose up -d nginx
+  # step 2: docker-compose up --build -d --remove-orphans frontend nginx
+  # step 6: docker-compose up --build -d --remove-orphans nginx
   nginx:
     container_name: nginx
+    restart: unless-stopped
     depends_on:
       - frontend
     build: ./nginx
@@ -83,14 +206,16 @@ services:
       - 80:80
       - 443:443
     environment:
+      NGINX_APP: /app/nginx
       NGINX_HOST: ${HOST_DOMAIN}
       FRONTEND_HOST: frontend
       FRONTEND_PORT: 8000
     volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
+      - nginx-conf:/app/nginx
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
 
-  # step 3: docker compose up -d certbot
+  # step 3: docker-compose up --build -d --remove-orphans certbot
   # step 4: docker logs certbot
   # step 7: crontab -e
   # step 8: 0 5 1 */2 * /usr/bin/docker compose -f ${DIR_PATH_HOST}/docker-compose.yml up certbot
@@ -100,6 +225,6 @@ services:
       - nginx
     image: certbot/certbot
     volumes: 
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
     command: certonly --webroot -w /var/www/certbot --force-renewal --email ${HOST_CERTBOT_EMAIL} -d ${HOST_DOMAIN} --agree-tos

@@ -1,4 +1,4 @@
-FROM openjdk:alpine as builder
+FROM openjdk:17-alpine as builder
 
 # install OpenSSL
 RUN apk upgrade --update-cache --available && \
@@ -21,27 +21,28 @@ ENV KAFKA_SSL_TRUSTSTORE_FILE=kafka.server.truststore.jks
 WORKDIR /app
 
 # Create own private Certificate Authority (CA)
-# RUN openssl req -new -nodes \
-#    -x509 \
-#    -days $VALIDITY_IN_DAYS \
-#    -newkey rsa:2048 \
-#    -keyout ca-key \
-#    -out ca-cert \
-#    -subj "/C=$COUNTRY/ST=$STATE/L=$LOCATION/O=$OU/CN=$CN" -passin pass:$KAFKA_SSL_PASSWORD
-
+# https://github.com/confluentinc/learn-kafka-courses/tree/main/fund-kafka-security
+# https://docs.confluent.io/platform/current/kafka/encryption.html
+# https://docs.confluent.io/platform/current/kafka/authentication_ssl.html#kafka-ssl-authentication
+# https://learn.microsoft.com/en-us/azure/hdinsight/kafka/apache-kafka-ssl-encryption-authentication
 RUN openssl req -new -nodes \
    -x509 \
    -days $VALIDITY_IN_DAYS \
    -newkey rsa:2048 \
-   -keyout ca.key \
-   -out ca.crt \
-   -config ca.cnf
+   -keyout ca-key \
+   -out ca-cert \
+   -subj "/C=$COUNTRY/ST=$STATE/L=$LOCATION/O=$OU/CN=$CN" -passin pass:$KAFKA_SSL_PASSWORD
 # Create Kafka Server Certificate and store in KeyStore
-RUN keytool -genkey -keystore $KAFKA_SSL_KEYSTORE_FILE -validity $VALIDITY_IN_DAYS \
+RUN keytool -genkey \
+    -keystore $KAFKA_SSL_KEYSTORE_FILE \
+    -keyalg RSA \
+    -validity $VALIDITY_IN_DAYS \
     -dname "C=$COUNTRY, ST=$STATE, L=$LOCATION, O=$OU, CN=$CN" \
-    -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD -storetype pkcs12
+    -storepass $KAFKA_SSL_PASSWORD \
+    -keypass $KAFKA_SSL_PASSWORD \
+    -storetype pkcs12
 # Create Certificate signed request (CSR)
-RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE -certreq -file cert-file -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD
+RUN keytool -keystore $KAFKA_SSL_KEYSTORE_FILE -keyalg RSA -certreq -file cert-file -storepass $KAFKA_SSL_PASSWORD -keypass $KAFKA_SSL_PASSWORD
 # Get CSR Signed with the CA
 RUN openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-file-signed -days $VALIDITY_IN_DAYS -CAcreateserial -passin pass:$KAFKA_SSL_PASSWORD
 # Import CA certificate in KeyStore

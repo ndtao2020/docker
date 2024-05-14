@@ -88,10 +88,10 @@ services:
       context: ./kafka
       dockerfile: Dockerfile
       args:
-        KAFKA_SSL_HOSTNAME: ${HOST_DOMAIN}:${KAFKA_PORT}
+        KAFKA_SSL_HOSTNAME: ${HOST_DOMAIN}
         KAFKA_SSL_PASSWORD: ${KAFKA_PASSWORD}
     ports:
-      - 29093:9093
+      - ${KAFKA_PORT}:9093
     volumes:
       - kafka-secrets:/etc/kafka/secrets
     environment:
@@ -102,7 +102,7 @@ services:
       KAFKA_LISTENERS: 'SSL-INTERNAL://:19093,CONTROLLER://kafka-1:29092,SSL://:9093'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
       KAFKA_SECURITY_PROTOCOL: SSL
-      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-1:19093,SSL://localhost:29093
+      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-1:19093,SSL://${HOST_DOMAIN}:${KAFKA_PORT}
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -110,6 +110,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_SSL_ENABLED_PROTOCOLS: 'TLSv1.1,TLSv1.2'
       KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
       KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
       KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
@@ -144,6 +145,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_SSL_ENABLED_PROTOCOLS: 'TLSv1.1,TLSv1.2'
       KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
       KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
       KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
@@ -178,6 +180,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      KAFKA_SSL_ENABLED_PROTOCOLS: 'TLSv1.1,TLSv1.2'
       KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
       KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
       KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'

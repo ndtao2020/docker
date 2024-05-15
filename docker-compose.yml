@@ -95,10 +95,14 @@ services:
       context: ./kafka
       dockerfile: Dockerfile
       args:
-        KAFKA_SSL_HOSTNAME: ${HOST_DOMAIN}
-        KAFKA_SSL_PASSWORD: ${KAFKA_PASSWORD}
+        HOSTNAME: broker
+        SSL_DOMAIN: ${KAFKA_SSL_DOMAIN_1}
+        SSL_KEYSTORE_FILE: keystore.jks
+        SSL_KEYSTORE_PASSWORD: ${KAFKA_SSL_KEYSTORE_PASSWORD}
+        SSL_TRUSTSTORE_FILE: truststore.jks
+        SSL_TRUSTSTORE_PASSWORD: ${KAFKA_SSL_TRUSTSTORE_PASSWORD}
     ports:
-      - ${KAFKA_PORT}:9093
+      - ${KAFKA_PORT_1}:9093
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -107,7 +111,7 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'SSL:SSL,CONTROLLER:PLAINTEXT,SSL-INTERNAL:SSL'
-      KAFKA_ADVERTISED_LISTENERS: 'SSL-INTERNAL://broker:19093,SSL://${HOST_DOMAIN}:${KAFKA_PORT}'
+      KAFKA_ADVERTISED_LISTENERS: 'SSL-INTERNAL://broker:19093,SSL://${KAFKA_SSL_DOMAIN_1}:${KAFKA_PORT_1}'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -118,13 +122,13 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
       KAFKA_SSL_ENABLED_PROTOCOLS: 'TLSv1.3'
-      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
-      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
-      KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'broker.keystore.jks'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'ssl_key_creds'
       KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
-      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'truststore_creds'
       KAFKA_SSL_CLIENT_AUTH: 'required'
       KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
 
@@ -139,10 +143,14 @@ services:
       context: ./kafka
       dockerfile: Dockerfile
       args:
-        KAFKA_SSL_HOSTNAME: ${HOST_DOMAIN}
-        KAFKA_SSL_PASSWORD: ${KAFKA_PASSWORD}
+        HOSTNAME: kafka-1
+        SSL_DOMAIN: ${KAFKA_SSL_DOMAIN_1}
+        SSL_KEYSTORE_FILE: keystore1.jks
+        SSL_KEYSTORE_PASSWORD: ${KAFKA_SSL_KEYSTORE_PASSWORD}
+        SSL_TRUSTSTORE_FILE: truststore.jks
+        SSL_TRUSTSTORE_PASSWORD: ${KAFKA_SSL_TRUSTSTORE_PASSWORD}
     ports:
-      - ${KAFKA_PORT}:9093
+      - ${KAFKA_PORT_1}:9093
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -156,19 +164,19 @@ services:
       KAFKA_LISTENERS: 'SSL-INTERNAL://:19093,CONTROLLER://kafka-1:29092,SSL://:9093'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
       KAFKA_SECURITY_PROTOCOL: SSL
-      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-1:19093,SSL://${HOST_DOMAIN}:${KAFKA_PORT}
+      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-1:19093,SSL://${KAFKA_SSL_DOMAIN_1}:${KAFKA_PORT_1}
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
-      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
-      KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs/1'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka-1.keystore.jks'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'ssl_key_creds'
       KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
-      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'truststore_creds'
       KAFKA_SSL_CLIENT_AUTH: 'required'
       KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
 
@@ -177,10 +185,20 @@ services:
     hostname: kafka-2
     container_name: kafka-2
     restart: unless-stopped
+    build:
+      context: ./kafka
+      dockerfile: Dockerfile
+      args:
+        HOSTNAME: kafka-2
+        SSL_DOMAIN: ${KAFKA_SSL_DOMAIN_2}
+        SSL_KEYSTORE_FILE: keystore2.jks
+        SSL_KEYSTORE_PASSWORD: ${KAFKA_SSL_KEYSTORE_PASSWORD}
+        SSL_TRUSTSTORE_FILE: truststore.jks
+        SSL_TRUSTSTORE_PASSWORD: ${KAFKA_SSL_TRUSTSTORE_PASSWORD}
     depends_on:
       - kafka-1
     ports:
-      - 39093:9093
+      - ${KAFKA_PORT_2}:9093
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -194,19 +212,19 @@ services:
       KAFKA_LISTENERS: 'SSL-INTERNAL://:19093,CONTROLLER://kafka-2:29092,SSL://:9093'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
       KAFKA_SECURITY_PROTOCOL: SSL
-      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-2:19093,SSL://${HOST_DOMAIN}:39093
+      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-2:19093,SSL://${KAFKA_SSL_DOMAIN_2}:${KAFKA_PORT_2}
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
-      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
-      KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs/2'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka-2.keystore.jks'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'ssl_key_creds'
       KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
-      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'truststore_creds'
       KAFKA_SSL_CLIENT_AUTH: 'required'
       KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
 
@@ -214,11 +232,20 @@ services:
     image: apache/kafka:latest
     hostname: kafka-3
     container_name: kafka-3
-    restart: unless-stopped
+    build:
+      context: ./kafka
+      dockerfile: Dockerfile
+      args:
+        HOSTNAME: kafka-3
+        SSL_DOMAIN: ${KAFKA_SSL_DOMAIN_3}
+        SSL_KEYSTORE_FILE: keystore3.jks
+        SSL_KEYSTORE_PASSWORD: ${KAFKA_SSL_KEYSTORE_PASSWORD}
+        SSL_TRUSTSTORE_FILE: truststore.jks
+        SSL_TRUSTSTORE_PASSWORD: ${KAFKA_SSL_TRUSTSTORE_PASSWORD}
     depends_on:
       - kafka-1
     ports:
-      - 49093:9093
+      - ${KAFKA_PORT_3}:9093
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -232,19 +259,19 @@ services:
       KAFKA_LISTENERS: 'SSL-INTERNAL://:19093,CONTROLLER://kafka-3:29092,SSL://:9093'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'SSL-INTERNAL'
       KAFKA_SECURITY_PROTOCOL: SSL
-      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-3:19093,SSL://${HOST_DOMAIN}:49093
+      KAFKA_ADVERTISED_LISTENERS: SSL-INTERNAL://kafka-3:19093,SSL://${KAFKA_SSL_DOMAIN_3}:${KAFKA_PORT_3}
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka01.keystore.jks'
-      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'kafka_keystore_creds'
-      KAFKA_SSL_KEY_CREDENTIALS: 'kafka_ssl_key_creds'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs/3'
+      KAFKA_SSL_KEYSTORE_FILENAME: 'kafka-3.keystore.jks'
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: 'keystore_creds'
+      KAFKA_SSL_KEY_CREDENTIALS: 'ssl_key_creds'
       KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
-      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'truststore_creds'
       KAFKA_SSL_CLIENT_AUTH: 'required'
       KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
 

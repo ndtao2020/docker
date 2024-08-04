@@ -85,6 +85,23 @@ services:
       timeout: 5s
       retries: 5
 
+  oracle-db:
+    container_name: oracle-db
+    image: container-registry.oracle.com/database/free:latest
+    restart: unless-stopped
+    ports:
+      - "1521:1521"
+      - "5500:5500"
+    environment:
+      ENABLE_ARCHIVELOG: true
+      ENABLE_FORCE_LOGGING: true
+      ORACLE_PDB: ${ORACLE_PDB}
+      ORACLE_PWD: ${ORACLE_PWD}
+    volumes:
+      - ${DIR_PATH_HOST}/oracle/db:/opt/oracle/oradata
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+
   # =========================== [KAFKA] ===========================
   # https://github.com/apache/kafka/tree/trunk/docker/examples/jvm/single-node/ssl
   broker:
@@ -312,8 +329,6 @@ services:
   # step 8: 0 5 1 */2 * /usr/bin/docker compose -f ${DIR_PATH_HOST}/docker-compose.yml up certbot
   certbot:
     container_name: certbot
-    depends_on:
-      - nginx
     image: certbot/certbot
     volumes: 
       - certbot-conf:/etc/letsencrypt

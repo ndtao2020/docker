@@ -314,6 +314,7 @@ services:
     environment:
       NGINX_APP: /app/nginx
       NGINX_HOST: ${HOST_DOMAIN}
+      FRONTEND_SCHEME: https
       FRONTEND_HOST: frontend
       FRONTEND_PORT: 8000
     volumes:

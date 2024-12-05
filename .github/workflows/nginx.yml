@@ -1,0 +1,58 @@
+name: Build
+
+on:
+  schedule:
+   - cron: '0 0 1 * *'
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  package:
+    name: Package and publish to Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Clone repository from github docker-nginx'
+        run: git clone https://github.com/nginxinc/docker-nginx.git
+      - name: 'Getting latest tag on git repository'
+        id: nginx
+        run: |
+          echo "version=$(git -C ./docker-nginx describe --abbrev=0 --tags)" >> $GITHUB_OUTPUT
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        id: buildx
+        with:
+          install: true
+      # Login Docker Hub
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+      # And make it available for builds
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        id: docker_build
+        with:
+          context: ./docker-nginx/modules
+          file: ./Dockerfile.alpine
+          # docker build --platform linux/amd64,linux/arm64,linux/ppc64le,linux/s390x -t ndtao2020/printing .
+          # docker buildx build --load --platform linux/amd64 --tag ndtao2020/printing:jdk-17-maven --builder default -f Dockerfile .
+          platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/riscv64,linux/s390x
+          builder: ${{ steps.buildx.outputs.name }}
+          push: true
+          build-args: |
+            ENABLED_MODULES=brotli geoip2
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ steps.nginx.outputs.version }}-alpine
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:mainline-alpine
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}
+          target: "${{ matrix.images.target }}"
+      # Verify build
+      - name: Verify
+        run: echo ${{ steps.docker_build.outputs.digest }}

@@ -11,8 +11,8 @@ on:
       - main
 
 jobs:
-  package:
-    name: Package and publish to Docker Hub
+  package-debian:
+    name: Package and publish to Docker Hub - Debian
     runs-on: ubuntu-latest
     steps:
       - name: 'Clone repository from github docker-nginx'
@@ -35,7 +35,50 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
       # And make it available for builds
-      - name: Build and Push Docker Image
+      - name: Build and Push Docker Image - Debian
+        uses: docker/build-push-action@v6
+        id: docker_build
+        with:
+          context: ./docker-nginx/modules
+          file: ./docker-nginx/modules/Dockerfile
+          platforms: linux/386,linux/amd64,linux/arm/v5,linux/arm/v7,linux/arm64/v8,linux/mips64le,linux/ppc64le,linux/s390x
+          builder: ${{ steps.buildx.outputs.name }}
+          push: true
+          build-args: |
+            ENABLED_MODULES=${{ vars.ENABLED_MODULES }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ steps.nginx.outputs.version }}-debian
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:debian
+          target: "${{ matrix.images.target }}"
+      # Verify build
+      - name: Verify
+        run: echo ${{ steps.docker_build.outputs.digest }}
+
+  package-alpine:
+    name: Package and publish to Docker Hub - Alpine
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Clone repository from github docker-nginx'
+        run: git clone https://github.com/nginxinc/docker-nginx.git
+      - name: 'Getting latest tag on git repository'
+        id: nginx
+        run: |
+          echo "version=$(git -C ./docker-nginx describe --abbrev=0 --tags)" >> $GITHUB_OUTPUT
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        id: buildx
+        with:
+          install: true
+      # Login Docker Hub
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+      # And make it available for builds
+      - name: Build and Push Docker Image - Alpine
         uses: docker/build-push-action@v6
         id: docker_build
         with:
@@ -47,10 +90,10 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           push: true
           build-args: |
-            ENABLED_MODULES=brotli geoip2
+            ENABLED_MODULES=${{ vars.ENABLED_MODULES }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ steps.nginx.outputs.version }}-alpine
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:mainline-alpine
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:alpine
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}
           target: "${{ matrix.images.target }}"
       # Verify build

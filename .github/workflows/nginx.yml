@@ -40,7 +40,7 @@ jobs:
         id: docker_build
         with:
           context: ./docker-nginx/modules
-          file: ./Dockerfile.alpine
+          file: ./docker-nginx/modules/Dockerfile.alpine
           # docker build --platform linux/amd64,linux/arm64,linux/ppc64le,linux/s390x -t ndtao2020/printing .
           # docker buildx build --load --platform linux/amd64 --tag ndtao2020/printing:jdk-17-maven --builder default -f Dockerfile .
           platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/riscv64,linux/s390x

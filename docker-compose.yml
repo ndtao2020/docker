@@ -45,9 +45,11 @@ volumes:
       device: ${DIR_PATH_HOST}/certbot/www
 
 services:
+  # https://hub.docker.com/_/redis
+  # docker-compose up --build -d --remove-orphans redis
   redis:
     container_name: redis
-    image: redis:7-alpine
+    image: redis:8-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     ports:
@@ -64,18 +66,20 @@ services:
       timeout: 5s
       retries: 5
 
+  # https://hub.docker.com/_/postgres
+  # docker-compose up --build -d --remove-orphans postgres
   postgres:
     container_name: postgres
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     restart: unless-stopped
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - postgres-db:/var/lib/postgresql/data
+      - postgres-db:/var/lib/postgresql
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     environment:
-      PGDATA: /var/lib/postgresql/data/pgdata
+      PGDATA: /var/lib/postgresql/17/docker
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -300,6 +304,7 @@ services:
     ports:
       - 8000:8000
 
+  # https://hub.docker.com/_/nginx
   # step 2: docker-compose up --build -d --remove-orphans frontend nginx
   # step 6: docker-compose up --build -d --remove-orphans nginx
   nginx:
@@ -309,8 +314,9 @@ services:
       - frontend
     build: ./nginx
     ports:
-      - 80:80
-      - 443:443
+      - "80:80"
+      - '443:443/tcp'
+      - '443:443/udp' # use UDP for usage of HTTP/3
     environment:
       NGINX_APP: /app/nginx
       NGINX_HOST: ${HOST_DOMAIN}
@@ -321,6 +327,8 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - nginx-conf:/app/nginx
+      - nginx-cache:/var/cache/nginx
+      - nginx-log:/var/log/nginx
       - certbot-conf:/etc/letsencrypt
       - certbot-www:/var/www/certbot
 
@@ -334,4 +342,6 @@ services:
     volumes: 
       - certbot-conf:/etc/letsencrypt
       - certbot-www:/var/www/certbot
-    command: certonly --webroot -w /var/www/certbot --force-renewal --email ${HOST_CERTBOT_EMAIL} -d ${HOST_DOMAIN} --agree-tos
+    command: |
+      certonly --webroot -w /var/www/certbot --force-renewal --email ${CERTBOT_REGISTER_EMAIL} -d ${HOST_DOMAIN} --agree-tos
+      chmod 700 /etc/letsencrypt/live/

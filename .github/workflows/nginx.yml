@@ -1,6 +1,11 @@
 name: Build
 
 on:
+  workflow_dispatch: # Allows manual triggering of the workflow
+    inputs:
+      tag:
+        default: "latest"
+        description: "tag of nginx"
   schedule:
    - cron: '0 0 1 * *'
   pull_request:

@@ -1,0 +1,116 @@
+# template.conf
+# Caching
+# https://gist.github.com/denji/8359866
+# https://phoenixnap.com/kb/nginx-reverse-proxy
+# https://docs.nginx.com/nginx/admin-guide/content-cache/content-caching/
+proxy_cache_path                                        /var/cache/nginx  keys_zone=my_cache:200m max_size=10g;
+proxy_cache_key                                         "$scheme$request_method$host$request_uri";
+
+# limit the number of connections per single IP
+# limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+
+# Define a rate limit zone
+# allows 5 requests per minute from a single IP address
+# The 10m specifies the amount of shared memory for storing the state of the rate limit.
+limit_req_zone                                          $binary_remote_addr zone=auth_zone:10m rate=200r/m;
+
+# ============================================================================================
+# Load Balancing
+upstream frontend {
+    least_conn;  # Load balancing algorithm: least connections
+    server ${FRONTEND_HOST}:${FRONTEND_PORT} weight=1;
+    # server backend3.example.com weight=1;
+    # server backup_backend.example.com backup;
+}
+
+# ============================================================================================
+# Server for https://${NGINX_HOST}
+server {
+    listen                                              80 reuseport;
+    listen                                              [::]:80 reuseport;
+    server_name                                         ${NGINX_HOST};
+    # ACME-challenge
+    location ^~ /.well-known/acme-challenge/ {
+        root                                            /var/www/certbot;
+    }
+    location / {
+        return 301 https://${NGINX_HOST}$request_uri;
+    }
+}
+
+server {
+    server_name                                         ${NGINX_HOST};
+
+    # limit_conn conn_limit_per_ip                        10;
+
+    # general config
+    include                                             /etc/nginx/custom/general.conf;
+    # protocols
+    include                                             /etc/nginx/custom/protocol.conf;
+    # security
+    include                                             /etc/nginx/custom/security.conf;
+
+    # SSL certificate and key.
+    ssl_certificate                                     /etc/letsencrypt/live/${NGINX_HOST}/fullchain.pem;
+    ssl_certificate_key                                 /etc/letsencrypt/live/${NGINX_HOST}/privkey.pem;
+    ssl_trusted_certificate                             /etc/letsencrypt/live/${NGINX_HOST}/chain.pem;
+
+    # config proxy
+    proxy_http_version                                  1.1;
+    proxy_read_timeout                                  600s;
+    proxy_ssl_protocols                                 TLSv1.3;
+    proxy_ssl_verify                                    off;
+    # proxy_ssl_certificate                             ${INTERNAL_SSL_CERTIFICATE};
+    # proxy_ssl_certificate_key                         ${INTERNAL_SSL_CERTIFICATE_KEY};
+    # proxy_ssl_trusted_certificate                     ${INTERNAL_SSL_TRUSTED_CERTIFICATE};
+    # proxy_ssl_verify_depth                            2;
+    # proxy_ssl_session_reuse                           on;
+
+    location /statics {
+        # compression
+        gzip_static                                     on;
+        brotli_static                                   on;
+        # logging
+        access_log                                      off;
+        # caching header
+        add_header                                      Access-Control-Allow-Origin "*";
+        add_header                                      Cache-Control "public";
+        expires                                         365d;
+        # caching
+        proxy_cache                                     my_cache;
+        proxy_cache_valid                               200 302 10m;
+        proxy_cache_valid                               404 500  1m;
+        proxy_cache_methods                             GET;
+        # pass
+        proxy_pass                                      http://frontend/statics;
+    }
+    location /api {
+        # map
+        proxy_set_header                                Upgrade                 $http_upgrade;
+        proxy_set_header                                Host                    $host;
+        proxy_set_header                                X-Real-IP               $remote_addr;
+        proxy_set_header                                X-Forwarded-For         $proxy_add_x_forwarded_for;
+        proxy_set_header                                X-Forwarded-Proto       $scheme;
+        proxy_ssl_ciphers                               ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305;
+        # rate limit
+        # - The burst=10 allows a burst of up to 10 requests in excess of the rate limit
+        # - nodelay ensures that requests are processed immediately until the burst limit is reached.
+        limit_req                                       zone=auth_zone burst=10 nodelay;
+        # pass
+        proxy_pass                                      http://frontend/api;
+    }
+    location / {
+        # compression
+        gzip_static                                     on;
+        brotli_static                                   on;
+        # map
+        proxy_set_header                                Upgrade                 $http_upgrade;
+        proxy_set_header                                Host                    $host;
+        proxy_set_header                                X-Real-IP               $remote_addr;
+        proxy_set_header                                X-Forwarded-For         $proxy_add_x_forwarded_for;
+        proxy_set_header                                X-Forwarded-Proto       $scheme;
+        proxy_ssl_ciphers                               ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305;
+        # pass
+        proxy_pass                                      http://frontend;
+    }
+}

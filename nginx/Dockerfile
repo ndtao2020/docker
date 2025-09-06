@@ -1,14 +1,25 @@
-FROM nginx:stable-alpine
+FROM ndtao2020/nginx-modules:mainline-alpine
 
-ENV NGINX_APP=/app/nginx
-ENV NGINX_TEMPLATE=/etc/nginx/templates/default.conf.template
+# Create dir for customs
+RUN mkdir -p /etc/nginx/ssl/ && \
+    chmod -R 755 /etc/nginx/ssl/
+RUN mkdir -p /etc/nginx/custom/ && \
+    chmod -R 755 /etc/nginx/custom/
 
-COPY nginx.conf $NGINX_TEMPLATE
-# COPY --from=build /app/build /usr/share/nginx/html
+COPY conf/custom/* /etc/nginx/custom
+# COPY conf/template.conf /etc/nginx/templates/default.conf.template
+COPY conf/templates/* /etc/nginx/templates/
 
-WORKDIR /app
+# openssl dhparam -out ./dhparams.pem 2048
+COPY conf/dhparams.pem /etc/nginx/ssl/dhparams.pem
+COPY conf/nginx.conf /etc/nginx/nginx.conf
 
-COPY custom.sh app.sh
+RUN chown -R nginx:nginx /etc/nginx/ && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /var/log/nginx
 
-RUN chmod +x ./app.sh
-RUN ./app.sh $NGINX_APP $NGINX_APP/nginx.conf $NGINX_TEMPLATE
+RUN touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid /run/nginx.pid
+
+# docker exec -it nginx /bin/sh
+USER nginx

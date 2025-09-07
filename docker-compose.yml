@@ -1,95 +1,208 @@
-version: '3'
+# ======================================[STEP-0]============================================
+# docker compose config
+networks:
+  equynhon-network:
+    driver: bridge
+
+secrets:
+  # ===================[SYSTEM]===================
+  # System ROOT CA
+  # https://stackoverflow.com/questions/47434877/how-to-generate-keystore-and-truststore
+  system-ssl-trusted-certificate:
+    file: ${SYSTEM_SSL_TRUSTED_DIR_PATH:-.docker/system/ssl}/truststore.crt
+  system-ssl-truststore-jks:
+    file: ${SYSTEM_SSL_TRUSTED_DIR_PATH:-.docker/system/ssl}/truststore.jks
+  # ===================[Authorization]===================
+  # Authorization SSL & Keys
+  authorization-ssl-certificate:
+    file: ${AUTHORIZAITON_SSL_CERTIFICATE_DIR_PATH:-.docker/authorization/ssl}/keystore.crt
+  authorization-ssl-certificate-key:
+    file: ${AUTHORIZAITON_SSL_CERTIFICATE_DIR_PATH:-.docker/authorization/ssl}/keystore.key
+  authorization-ssl-keystore-jks:
+    file: ${AUTHORIZAITON_SSL_CERTIFICATE_DIR_PATH:-.docker/authorization/ssl}/keystore.jks
+  # Authorization Keys
+  authorization-encryption-jks:
+    file: ${AUTHORIZAITON_JKS_DIR_PATH:-.docker/authorization/jks}/encryption.jks
 
 volumes:
-  # database
-  redis-db:
+  # redis
+  redis-conf:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DIR_PATH_HOST}/redis/data
-  postgres-db:
+      device: ${REDIS_CONF_DIR_PATH:-.docker/redis/conf}
+  redis-data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DIR_PATH_HOST}/postgres/data
+      device: ${REDIS_DATA_DIR_PATH:-.docker/redis/data}
+  # postgres
+  postgres-conf:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_CONF_DIR_PATH:-.docker/postgres/conf}
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_DIR_PATH:-.docker/postgres/data}
   # kafka
   kafka-secrets:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DIR_PATH_HOST}/kafka/secrets
+      device: ${KAFKA_CONF_DIR_PATH:-.docker/kafka/secrets}
   kafka-logs:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DIR_PATH_HOST}/kafka/logs
+      device: ${KAFKA_DATA_DIR_PATH:-.docker/kafka/logs}
   # nginx
   nginx-conf:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DIR_PATH_HOST}/nginx
+      device: ${NGINX_CONF_DIR_PATH:-.docker/nginx/conf}
+  nginx-cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${NGINX_CACHE_DIR_PATH:-.docker/nginx/cache}
+  nginx-log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${NGINX_LOG_DIR_PATH:-.docker/nginx/log}
+  # certbot
   certbot-conf:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DIR_PATH_HOST}/certbot/conf
+      device: ${CERTBOT_CONF_DIR_PATH:-.docker/certbot/conf}
   certbot-www:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: ${DIR_PATH_HOST}/certbot/www
+      device: ${CERTBOT_WWW_DIR_PATH:-.docker/certbot/conf}
+  # for app
+  web_upload:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${AUTHORIZAITON_UPLOAD_DIR_PATH:-.docker/authorization/upload}
+  web_log:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${AUTHORIZAITON_LOG_DIR_PATH:-.docker/authorization/log}
 
 services:
-  # https://hub.docker.com/_/redis
-  # docker-compose up --build -d --remove-orphans redis
-  redis:
-    container_name: redis
-    image: redis:8-alpine
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-    ports:
-      - "${REDIS_PORT}:6379"
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
+  # Cloudflare Tunnel Service
+  # docker compose up --build -d --remove-orphans cloudflare-tunnel
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest              # Pull the latest version of the Cloudflare Tunnel image
+    container_name: cloudflare-tunnel                 # Name of the Cloudflare Tunnel container
+    hostname: cloudflare-tunnel                       # Hostname for the Cloudflare Tunnel container
+    restart: unless-stopped                           # Restart the container unless manually stopped
+    # Logging configuration for Cloudflare Tunnel container
+    logging:
+      driver: "json-file"                             # Use the default json-file logging driver
+      options:
+        max-size: "100m"                              # Maximum log file size before rotation (100 MB)
+        max-file: "10"                                # Maximum number of log files to retain (10)
+    # Network mode configuration
+    # network_mode: "host"                              # Use the host network (no isolation between host and container)
+    networks:
+      - equynhon-network
+    # Command to run Cloudflare Tunnel
+    command: tunnel --no-autoupdate run               # Command to start the Cloudflare tunnel
+    # Volume configuration for time synchronization and hosts file persistence
     volumes:
-      - redis-db:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
+      - /etc/localtime:/etc/localtime:ro              # Synchronize time with the host
+      # - ./config/hosts:/etc/hosts                     # Mount hosts file from host to container
+    # Environment variables for Cloudflare Tunnel
+    environment:
+      - "TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}"     # Pass the Cloudflare Tunnel token from environment variable
+    # Health check configuration to verify Cloudflare Tunnel readiness
     healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
-      interval: 20s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "cloudflared", "--version"]       # Check if cloudflared version command works
+      interval: 30s                                   # Time between health check attempts
+      timeout: 10s                                    # Time to wait for a response
+      retries: 3                                      # Number of retries before marking as unhealthy
+      start_period: 10s                               # Delay before health checks begin
+    # Container labels for additional metadata
+    # labels:
+    #   - "com.centurylinklabs.watchtower.enable=true"  # Enable automatic updates with Watchtower
 
   # https://hub.docker.com/_/postgres
-  # docker-compose up --build -d --remove-orphans postgres
+  # docker compose up --build -d --remove-orphans postgres
+    # docker compose up --build -d redis postgres
   postgres:
+    # https://www.postgresql.org/docs/14/runtime-config.html
     container_name: postgres
     image: postgres:17-alpine
     restart: unless-stopped
+    networks:
+      - equynhon-network
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres-db:/var/lib/postgresql
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      - postgres-conf:/etc/postgresql/postgresql.conf
+      - postgres-data:/var/lib/postgresql/data
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
     environment:
+      LANG: en_US.utf8
       PGDATA: /var/lib/postgresql/17/docker
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     healthcheck:
-      test: ["CMD", "pg_isready"]
-      interval: 20s
-      timeout: 5s
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      start_period: 30s
+      interval: 60s
+      timeout: 10s
+      retries: 5
+
+  # https://hub.docker.com/_/redis
+  # docker compose up --build -d --remove-orphans redis
+  redis:
+    # https://redis.io/docs/latest/operate/oss_and_stack/management/config-file/
+    container_name: redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+    networks:
+      - equynhon-network
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - redis-conf:/usr/local/etc/redis/redis.conf
+      - redis-data:/data
+    environment:
+      REDIS_USER: ${REDIS_USER:-default}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-secret01@X}
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 60s
+      timeout: 10s
       retries: 5
 
   oracle-db:
@@ -304,18 +417,73 @@ services:
     container_name: frontend
     restart: unless-stopped
     image: crccheck/hello-world
+    secrets:
+      - system-ssl-trusted-certificate
+      - system-ssl-truststore-jks
+      - authorization-ssl-certificate
+      - authorization-ssl-certificate-key
+      - authorization-ssl-keystore-jks
+      - authorization-encryption-jks
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - equynhon-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - 8000:8000
+      - "8000:8000"
+      - "8383:8383"
+    volumes:
+      - web_upload:/app/upload
+      - web_log:/app/log
+    env_file:
+      - ".equynhon.env"
+    environment:
+      # Truststore (CA Root)
+      EQN_SECURITY_TRUSTSTORE_FILE: /run/secrets/system-ssl-truststore-jks
+      EQN_SECURITY_CA_CERTIFICATE_FILE: /run/secrets/system-ssl-trusted-certificate
+      # Authorization Keystore (CA,keystore,CRT)
+      EQN_SECURITY_SSL_KEYSTORE_FILE: /run/secrets/authorization-ssl-keystore-jks
+      EQN_SECURITY_SSL_CERTIFICATE_FILE: /run/secrets/authorization-ssl-certificate
+      EQN_SECURITY_SSL_CERTIFICATE_KEY_FILE: /run/secrets/authorization-ssl-certificate-key
+      # Authorization Keys (Encryption)
+      EQN_SECURITY_ENCRYPTION_FILE: /run/secrets/authorization-encryption-jks
+      # Database
+      EQN_DATABASE_URL: postgresql://postgres:5432/${POSTGRES_DB:-authorization}
+      EQN_DATABASE_USERNAME: ${POSTGRES_USER:-postgres}
+      EQN_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-secret01@X}
+      EQN_CACHE_REDIS: redis://user:pass@host:port
+    # healthcheck:
+    #   test: [ "CMD", "curl", "-f", "https://localhost:8383/api/health" ]
+    #   interval: 200s
+    #   timeout: 200s
+    #   retries: 5
 
   # https://hub.docker.com/_/nginx
-  # step 2: docker-compose up --build -d --remove-orphans frontend nginx
-  # step 6: docker-compose up --build -d --remove-orphans nginx
+  # step 2: docker compose up --build -d --remove-orphans frontend nginx
+  # step 6: docker compose up --build -d --remove-orphans nginx
   nginx:
     container_name: nginx
     restart: unless-stopped
     depends_on:
-      - frontend
-    build: ./nginx
+      frontend: # service 1
+        condition: service_started
+    secrets:
+      # System
+      - system-ssl-trusted-certificate
+      # Authorization
+      - authorization-ssl-certificate
+      - authorization-ssl-certificate-key
+    build:
+      context: ./nginx
+    networks:
+      - equynhon-network
     ports:
       - "80:80"
       - '443:443/tcp'
@@ -323,6 +491,18 @@ services:
     environment:
       NGINX_APP: /app/nginx
       NGINX_HOST: ${HOST_DOMAIN}
+      # Authorization
+      AUTHORIZATION_EXTERNAL_DOMAIN: ${AUTHORIZATION_PUBLIC_DOMAIN}
+      AUTHORIZATION_EXTERNAL_PORT: 80
+      AUTHORIZATION_EXTERNAL_SSL_PORT: 443
+      AUTHORIZATION_INTERNAL_SCHEME: https
+      AUTHORIZATION_INTERNAL_DOMAIN: authorization
+      AUTHORIZATION_INTERNAL_PORT: 8080
+      AUTHORIZATION_INTERNAL_SSL_PORT: 8383
+      AUTHORIZATION_INTERNAL_SSL_TRUSTED_CERTIFICATE: /run/secrets/system-ssl-trusted-certificate
+      AUTHORIZATION_INTERNAL_SSL_CERTIFICATE: /run/secrets/authorization-ssl-certificate
+      AUTHORIZATION_INTERNAL_SSL_CERTIFICATE_KEY: /run/secrets/authorization-ssl-certificate-key
+      # Frontend
       FRONTEND_SCHEME: https
       FRONTEND_HOST: frontend
       FRONTEND_PORT: 8000
@@ -335,7 +515,7 @@ services:
       - certbot-conf:/etc/letsencrypt
       - certbot-www:/var/www/certbot
 
-  # step 3: docker-compose up --build -d --remove-orphans certbot
+  # step 3: docker compose up --build -d --remove-orphans certbot
   # step 4: docker logs certbot
   # step 7: crontab -e
   # step 8: 0 5 1 */2 * /usr/bin/docker compose -f ${DIR_PATH_HOST}/docker-compose.yml up certbot
@@ -347,4 +527,4 @@ services:
       - certbot-www:/var/www/certbot
     command: |
       certonly --webroot -w /var/www/certbot --force-renewal --email ${CERTBOT_REGISTER_EMAIL} -d ${HOST_DOMAIN} --agree-tos
-      chmod 700 /etc/letsencrypt/live/
+      chmod 755 /etc/letsencrypt/live/${HOST_DOMAIN}/*.pem;

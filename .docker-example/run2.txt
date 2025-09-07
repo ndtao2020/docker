@@ -1,0 +1,43 @@
+@echo off
+
+SET project_dir=D:\Projects\rakuten
+
+SETLOCAL
+SET project_sub_dir=rte-admin-backend
+SET project_local_dir=%project_dir%\%project_sub_dir%
+echo ============================= [%project_sub_dir%] ============================= 
+git -C %project_local_dir% fetch && git -C %project_local_dir% pull
+for /f %%i in ('git -C %project_local_dir% branch --show-current') do set project_branch=%%i
+start "" https://bitbucket.org/zumata_scripts/%project_sub_dir%/commits/branch/%project_branch%
+ENDLOCAL
+
+SETLOCAL
+SET project_sub_dir=rte-admin-frontend
+SET project_local_dir=%project_dir%\%project_sub_dir%
+echo ============================= [%project_sub_dir%] ============================= 
+git -C %project_local_dir% fetch && git -C %project_local_dir% pull
+for /f %%i in ('git -C %project_local_dir% branch --show-current') do set project_branch=%%i
+start "" https://bitbucket.org/zumata_scripts/%project_sub_dir%/commits/branch/%project_branch%
+ENDLOCAL
+
+SETLOCAL
+SET project_sub_dir=rte-guest-backend
+SET project_local_dir=%project_dir%\%project_sub_dir%
+echo ============================= [%project_sub_dir%] ============================= 
+git -C %project_local_dir% fetch && git -C %project_local_dir% pull
+for /f %%i in ('git -C %project_local_dir% branch --show-current') do set project_branch=%%i
+start "" https://bitbucket.org/zumata_scripts/%project_sub_dir%/commits/branch/%project_branch%
+ENDLOCAL
+
+SETLOCAL
+SET project_sub_dir=rte-guest-frontend
+SET project_local_dir=%project_dir%\%project_sub_dir%
+echo ============================= [%project_sub_dir%] ============================= 
+git -C %project_local_dir% fetch && git -C %project_local_dir% pull
+for /f %%i in ('git -C %project_local_dir% branch --show-current') do set project_branch=%%i
+start "" https://bitbucket.org/zumata_scripts/%project_sub_dir%/commits/branch/%project_branch%
+ENDLOCAL
+
+start "" https://bitbucket.org/zumata_scripts/workspace/pull-requests/?user_filter=ALL
+
+pause

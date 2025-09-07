@@ -32,12 +32,13 @@ services:
       - REPMGR_CHILD_NODES_RECONNECT_ATTEMPTS=3
       - REPMGR_CHILD_NODES_RECONNECT_INTERVAL=5
     volumes:
-      # chmod 777 ./config && chmod 777 ./config/postgresql.conf
-      - ./config:/opt/bitnami/postgresql/conf
+      # chmod 777 ./conf-1 && chmod 777 ./conf-1/postgresql.conf
+      - ./conf-1:/opt/bitnami/postgresql/conf
       - postgres_1_data:/bitnami/postgresql
       - postgres_backups:/backups
     networks:
       - postgres-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -h pg-1"]
       interval: 15s
@@ -85,12 +86,14 @@ services:
       # - REPMGR_LOG_LEVEL=INFO
       - REPMGR_FAILOVER=automatic
     volumes:
-      - ./config:/opt/bitnami/postgresql/conf
+      # chmod 777 ./conf-2 && chmod 777 ./conf-2/postgresql.conf
+      - ./conf-2:/opt/bitnami/postgresql/conf
       - postgres_2_data:/bitnami/postgresql
     networks:
       - postgres-network
     depends_on:
       - pg-1
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -h pg-2"]
       interval: 15s
@@ -138,12 +141,14 @@ services:
       # - REPMGR_LOG_LEVEL=INFO
       - REPMGR_FAILOVER=automatic
     volumes:
-      - ./config:/opt/bitnami/postgresql/conf
+      # chmod 777 ./conf-3 && chmod 777 ./conf-3/postgresql.conf
+      - ./conf-3:/opt/bitnami/postgresql/conf
       - postgres_3_data:/bitnami/postgresql
     networks:
       - postgres-network
     depends_on:
       - pg-1
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -h pg-3"]
       interval: 15s
@@ -181,10 +186,12 @@ services:
       - PGBOUNCER_MAX_CLIENT_CONN=1000
       - PGBOUNCER_DEFAULT_POOL_SIZE=90
       - PGBOUNCER_IGNORE_STARTUP_PARAMETERS=extra_float_digits
-    # ports:
-    #   - "6333:6432"
     networks:
       - postgres-network
+    depends_on:
+      - pg-2
+      - pg-3
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "pgbouncer", "-d", "pgbouncer.ini"]
       interval: 30s

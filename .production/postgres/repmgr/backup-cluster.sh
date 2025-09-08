@@ -28,3 +28,4 @@ rm -rf /backups/base_backup_${DATE}
 find ${BACKUP_DIR} -name "*.tar.gz" -mtime +${RETENTION_DAYS} -delete
 
 echo "Backup completed: postgres_backup_${DATE}.tar.gz"
+

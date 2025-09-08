@@ -1,0 +1,253 @@
+# version: '3.9'
+# https://github.com/bitnami/containers/tree/main/bitnami/postgresql-repmgr#environment-variables
+# https://hub.docker.com/r/bitnami/postgresql-repmgr
+# step 1: docker network create -d overlay --attachable pg-repmgr-network
+# step 2: env $(cat .env | xargs) docker stack deploy -c docker-compose.yml pg-repmgr-cluster
+# step 3: docker service update pg-repmgr-cluster_pgbouncer --publish-add 5432:6432
+
+services:
+  pg-1:
+    image: bitnami/postgresql-repmgr:17
+    environment:
+      # postgres - system
+      - POSTGRESQL_POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+      - POSTGRESQL_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
+      - POSTGRESQL_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+      # primary by default (master). For slaves, use POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_MODE=master
+      # postgres - default
+      - POSTGRESQL_DATABASE=${POSTGRES_DB}
+      - POSTGRESQL_USERNAME=${POSTGRES_USER}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRESQL_PORT_NUMBER=${POSTGRES_PORT:-5432}
+      # repmgr
+      - REPMGR_NODE_ID=1
+      - REPMGR_NODE_NAME=pgw-1
+      - REPMGR_PASSWORD=${REPMGR_PASSWORD}
+      - REPMGR_PRIMARY_HOST=pg-1
+      - REPMGR_NODE_NETWORK_NAME=pg-1
+      - REPMGR_PARTNER_NODES=pg-1,pg-2,pg-3
+      # - REPMGR_LOG_LEVEL=INFO
+      - REPMGR_FAILOVER=automatic
+      - REPMGR_CHILD_NODES_CHECK_INTERVAL=5
+      - REPMGR_CHILD_NODES_CONNECT_TIMEOUT=10
+      - REPMGR_CHILD_NODES_RECONNECT_ATTEMPTS=3
+      - REPMGR_CHILD_NODES_RECONNECT_INTERVAL=5
+    volumes:
+      # chmod -R 777 ./conf-1
+      - postgres_1_data:/bitnami/postgresql:rw
+      - postgres_backups:/backups:rw
+    networks:
+      - pg-repmgr-network
+    restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pg_isready -U postgres -h pg-1"]
+    #   interval: 15s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 60s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.postgresql.role == primary
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      # resources:
+      #   limits:
+      #     memory: 4G
+      #     cpus: '2'
+      #   reservations:
+      #     memory: 2G
+      #     cpus: '1'
+
+  pg-2:
+    image: bitnami/postgresql-repmgr:17
+    environment:
+      # postgres - system
+      - POSTGRESQL_POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+      - POSTGRESQL_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
+      - POSTGRESQL_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+      # primary by default (master). For slaves, use POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_MODE=slave
+      # postgres - default
+      - POSTGRESQL_DATABASE=${POSTGRES_DB}
+      - POSTGRESQL_USERNAME=${POSTGRES_USER}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRESQL_PORT_NUMBER=${POSTGRES_PORT:-5432}
+      # repmgr
+      - REPMGR_NODE_ID=2
+      - REPMGR_NODE_NAME=pgw-2
+      - REPMGR_PASSWORD=${REPMGR_PASSWORD}
+      - REPMGR_PRIMARY_HOST=pg-1
+      - REPMGR_NODE_NETWORK_NAME=pg-2
+      - REPMGR_PARTNER_NODES=pg-1,pg-2,pg-3
+      # - REPMGR_LOG_LEVEL=INFO
+      - REPMGR_FAILOVER=automatic
+    volumes:
+      - postgres_2_data:/bitnami/postgresql:rw
+    networks:
+      - pg-repmgr-network
+    depends_on:
+      - pg-1
+    restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pg_isready -U postgres -h pg-2"]
+    #   interval: 15s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 90s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.postgresql.role == replica
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      # resources:
+      #   limits:
+      #     memory: 4G
+      #     cpus: '2'
+      #   reservations:
+      #     memory: 2G
+      #     cpus: '1'
+
+  pg-3:
+    image: bitnami/postgresql-repmgr:17
+    environment:
+      # postgres - system
+      - POSTGRESQL_POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+      - POSTGRESQL_REPLICATION_USER=${POSTGRES_REPLICATION_USER}
+      - POSTGRESQL_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+      # primary by default (master). For slaves, use POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_MODE=slave
+      # postgres - default
+      - POSTGRESQL_DATABASE=${POSTGRES_DB}
+      - POSTGRESQL_USERNAME=${POSTGRES_USER}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRESQL_PORT_NUMBER=${POSTGRES_PORT:-5432}
+      # repmgr
+      - REPMGR_NODE_ID=3
+      - REPMGR_NODE_NAME=pgw-3
+      - REPMGR_PASSWORD=${REPMGR_PASSWORD}
+      - REPMGR_PRIMARY_HOST=pg-1
+      - REPMGR_NODE_NETWORK_NAME=pg-3
+      - REPMGR_PARTNER_NODES=pg-1,pg-2,pg-3
+      # - REPMGR_LOG_LEVEL=INFO
+      - REPMGR_FAILOVER=automatic
+    volumes:
+      - postgres_3_data:/bitnami/postgresql:rw
+    networks:
+      - pg-repmgr-network
+    depends_on:
+      - pg-1
+    restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD-SHELL", "pg_isready -U postgres -h pg-3"]
+    #   interval: 15s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 90s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.postgresql.role == replica
+      #     - node.labels.az != zone-a
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+      # resources:
+      #   limits:
+      #     memory: 4G
+      #     cpus: '2'
+      #   reservations:
+      #     memory: 2G
+      #     cpus: '1'
+
+  pgbouncer:
+    image: bitnami/pgbouncer:latest
+    # https://hub.docker.com/r/bitnami/pgbouncer#customizable-environment-variables
+    environment:
+      # Connection to Backend PostgreSQL
+      - POSTGRESQL_DATABASE=${POSTGRES_DB}
+      - POSTGRESQL_USERNAME=${POSTGRES_USER}
+      - POSTGRESQL_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRESQL_HOST=pg-1
+      - POSTGRESQL_PORT=${POSTGRES_PORT:-5432}
+      # PgBouncer Admin/Database Settings
+      - PGBOUNCER_AUTH_USER=pgbouncer_admin
+      - PGBOUNCER_DATABASE=${POSTGRES_DB}
+      # Pool configuration (example)
+      - PGBOUNCER_POOL_MODE=transaction
+      - PGBOUNCER_MAX_CLIENT_CONN=100
+      - PGBOUNCER_DEFAULT_POOL_SIZE=20
+      - PGBOUNCER_IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    networks:
+      - pg-repmgr-network
+    depends_on:
+      - pg-2
+      - pg-3
+    restart: unless-stopped
+    # healthcheck:
+    #   # Using the default script, just customizing timing
+    #   test: ["CMD", "/opt/bitnami/scripts/pgbouncer/healthcheck.sh"]
+    #   interval: 15s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 30s # Give the container more time to start up initially
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.role != worker
+      # resources:
+      #   limits:
+      #     memory: 512M
+      #     cpus: '0.5'
+
+volumes:
+  postgres_1_data:
+    # driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=127.0.0.1,nfsvers=4" # Replace localhost with your server's IP
+      device: ":/home/teo/nfs/postgres-repmgr-network/pg-1"
+  
+  postgres_2_data:
+    # driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=127.0.0.1,nfsvers=4" # Replace localhost with your server's IP
+      device: ":/home/teo/nfs/postgres-repmgr-network/pg-2"
+  
+  postgres_3_data:
+    # driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=127.0.0.1,nfsvers=4" # Replace localhost with your server's IP
+      device: ":/home/teo/nfs/postgres-repmgr-network/pg-3"
+  
+  postgres_backups:
+    # driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=127.0.0.1,nfsvers=4" # Replace localhost with your server's IP
+      device: ":/home/teo/nfs/postgres-repmgr-network/backups"
+
+# configs:
+#   postgresql_conf:
+#     file: ./config/postgresql.conf
+#   repmgr_conf:
+#     file: ./config/repmgr.conf
+
+networks:
+  pg-repmgr-network:
+    external: true
+    # driver: overlay # Or bridge, depending on your setup
+    # attachable: true

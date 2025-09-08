@@ -150,9 +150,12 @@ services:
 
   # https://hub.docker.com/_/postgres
   # docker compose up --build -d --remove-orphans postgres
-    # docker compose up --build -d redis postgres
+  # docker stack deploy -c docker-compose.yml mypostgresstack
   postgres:
     # https://www.postgresql.org/docs/14/runtime-config.html
+    # https://medium.com/norsys-octogone/a-local-environment-for-postgresql-with-docker-compose-7ae68c998068
+    # https://medium.com/@svignesh/running-rails-postgresql-in-docker-swarm-cluster-431c0833d56e
+    # https://www.crunchydata.com/blog/an-easy-recipe-for-creating-a-postgresql-cluster-with-docker-swarm
     container_name: postgres
     image: postgres:17-alpine
     restart: unless-stopped
@@ -168,7 +171,7 @@ services:
     command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
     environment:
       LANG: en_US.utf8
-      PGDATA: /var/lib/postgresql/17/docker
+      PGDATA: /var/lib/postgresql/data/pgdata
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -184,7 +187,7 @@ services:
   redis:
     # https://redis.io/docs/latest/operate/oss_and_stack/management/config-file/
     container_name: redis
-    image: redis:7-alpine
+    image: redis:8-alpine
     restart: unless-stopped
     command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
     networks:
@@ -431,11 +434,6 @@ services:
         condition: service_healthy
     networks:
       - equynhon-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     ports:
       - "8000:8000"
       - "8383:8383"

@@ -1,0 +1,253 @@
+version: "3.9"
+
+# https://github.com/zalando/spilo/blob/master/ENVIRONMENT.rst
+x-pg-env: &pg-env
+  # Patroni cluster identity
+  SCOPE: "pgprod"
+  CLUSTER_NAME: "pgprod"
+
+  
+  PGPASSWORD_REPLICATION_FILE: "/run/secrets/pg_replication_password"
+
+  # Etcd DCS endpoints (see etcd services below)
+  ETCD_HOSTS: "etcd-1:2379,etcd-2:2379,etcd-3:2379"
+
+  # PostgreSQL settings (sane defaults; tune per workload)
+  PATRONI_POSTGRESQL_USE_UNIX_SOCKET: "true"
+  PATRONI_POSTGRESQL_LISTEN: "0.0.0.0:5432"
+  PATRONI_RESTAPI_LISTEN: "0.0.0.0:8008"
+  PATRONI_RESTAPI_CONNECT_ADDRESS: "0.0.0.0:8008"
+
+  # Synchronous replication settings (optional; safer writes)
+  PATRONI_SYNCHRONOUS_MODE: "true"
+  PATRONI_SYNCHRONOUS_MODE_STRICT: "true"
+  PATRONI_SYNCHRONOUS_NODE_COUNT: "1"
+
+  # Enable logical replication for downstreams (CDC, read replicas, etc.)
+  PATRONI_POSTGRESQL_PARAMETERS: |
+    max_connections=400
+    shared_buffers=1GB
+    wal_level=logical
+    max_wal_senders=20
+    max_replication_slots=20
+    hot_standby=on
+    wal_keep_size=512MB
+    effective_cache_size=3GB
+    maintenance_work_mem=256MB
+
+  # Bootstrap superuser names
+  SUPERUSER_USERNAME: "postgres"
+  PGPASSWORD_SUPERUSER: "${POSTGRES_ADMIN_PASSWORD}"
+
+  # Bootstrap replica names
+  PGUSER_STANDBY: "replicator"
+  PGPASSWORD_STANDBY: "${POSTGRES_REPLICATION_PASSWORD}"
+
+  # Patroni REST auth (protects write operations like switchover)
+  PATRONI_RESTAPI_USERNAME: "patroni"
+
+  # Optional init DBs / users via SPILO_CONFIGURATION
+  SPILO_CONFIGURATION: |
+    bootstrap:
+      dcs:
+        postgresql:
+          parameters:
+            shared_buffers: 1GB
+      initdb:
+        - auth-host: scram-sha-256
+        - auth-local: scram-sha-256
+        - encoding: UTF8
+        - data-checksums
+    postgresql:
+      use_unix_socket: true
+
+secrets:
+  pg_superuser_password:
+    external: true
+  pg_replication_password:
+    external: true
+  patroni_rest_password:
+    external: true
+
+configs:
+  haproxy_cfg:
+    external: true
+
+networks:
+  patroni-network:
+    external: true
+
+volumes:
+  pgdata-1:
+  pgdata-2:
+  pgdata-3:
+
+services:
+  # -----------------------
+  # Etcd quorum (3 nodes)
+  # -----------------------
+  etcd-1:
+    image: bitnami/etcd:3.5
+    command: >-
+      /opt/bitnami/etcd/bin/etcd \
+      --name etcd-1 \
+      --data-dir /bitnami/etcd \
+      --initial-advertise-peer-urls http://etcd-1:2380 \
+      --listen-peer-urls http://0.0.0.0:2380 \
+      --listen-client-urls http://0.0.0.0:2379 \
+      --advertise-client-urls http://etcd-1:2379 \
+      --initial-cluster-token etcd-cluster-1 \
+      --initial-cluster etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380 \
+      --initial-cluster-state new
+    networks: [patroni-network]
+    deploy:
+      placement:
+        constraints: ["node.labels.pg == 1"]
+
+  etcd-2:
+    image: bitnami/etcd:3.5
+    command: >-
+      /opt/bitnami/etcd/bin/etcd \
+      --name etcd-2 \
+      --data-dir /bitnami/etcd \
+      --initial-advertise-peer-urls http://etcd-2:2380 \
+      --listen-peer-urls http://0.0.0.0:2380 \
+      --listen-client-urls http://0.0.0.0:2379 \
+      --advertise-client-urls http://etcd-2:2379 \
+      --initial-cluster-token etcd-cluster-1 \
+      --initial-cluster etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380 \
+      --initial-cluster-state new
+    networks: [patroni-network]
+    deploy:
+      placement:
+        constraints: ["node.labels.pg == 1"]
+
+  etcd-3:
+    image: bitnami/etcd:3.5
+    command: >-
+      /opt/bitnami/etcd/bin/etcd \
+      --name etcd-3 \
+      --data-dir /bitnami/etcd \
+      --initial-advertise-peer-urls http://etcd-3:2380 \
+      --listen-peer-urls http://0.0.0.0:2380 \
+      --listen-client-urls http://0.0.0.0:2379 \
+      --advertise-client-urls http://etcd-3:2379 \
+      --initial-cluster-token etcd-cluster-1 \
+      --initial-cluster etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380 \
+      --initial-cluster-state new
+    networks: [patroni-network]
+    deploy:
+      placement:
+        constraints: ["node.labels.pg == 1"]
+
+  # -------------------------------------
+  # Patroni + PostgreSQL (Spilo) x 3
+  # https://github.com/zalando/spilo/pkgs/container/spilo-15
+  # -------------------------------------
+  patroni-1:
+    image: ghcr.io/zalando/spilo-17:latest
+    environment:
+      <<: *pg-env
+    secrets:
+      - source: pg_superuser_password
+        target: /run/secrets/pg_superuser_password
+      - source: pg_replication_password
+        target: /run/secrets/pg_replication_password
+      - source: patroni_rest_password
+        target: /run/secrets/patroni_rest_password
+    volumes:
+      - pgdata-1:/home/postgres/pgdata
+    networks: [patroni-network]
+    ports:
+      - target: 8008
+        published: 8001
+        mode: host
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.pg == 1"
+      restart_policy:
+        condition: on-failure
+
+  patroni-2:
+    image: ghcr.io/zalando/spilo-17:latest
+    environment:
+      <<: *pg-env
+    secrets:
+      - source: pg_superuser_password
+        target: /run/secrets/pg_superuser_password
+      - source: pg_replication_password
+        target: /run/secrets/pg_replication_password
+      - source: patroni_rest_password
+        target: /run/secrets/patroni_rest_password
+    volumes:
+      - pgdata-2:/home/postgres/pgdata
+    networks: [patroni-network]
+    ports:
+      - target: 8008
+        published: 8002
+        mode: host
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.pg == 1"
+      restart_policy:
+        condition: on-failure
+
+  patroni-3:
+    image: ghcr.io/zalando/spilo-17:latest
+    environment:
+      <<: *pg-env
+    secrets:
+      - source: pg_superuser_password
+        target: /run/secrets/pg_superuser_password
+      - source: pg_replication_password
+        target: /run/secrets/pg_replication_password
+      - source: patroni_rest_password
+        target: /run/secrets/patroni_rest_password
+    volumes:
+      - pgdata-3:/home/postgres/pgdata
+    networks: [patroni-network]
+    ports:
+      - target: 8008
+        published: 8003
+        mode: host
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.pg == 1"
+      restart_policy:
+        condition: on-failure
+
+  # -----------------------
+  # HAProxy (2 replicas)
+  # docker service logs -f <service_name_or_id>
+  # -----------------------
+  haproxy:
+    image: haproxy:2.9
+    networks: [patroni-network]
+    ports:
+      - target: 5432
+        published: 5432
+        protocol: tcp
+        mode: host
+      - target: 5433
+        published: 5433
+        protocol: tcp
+        mode: host
+      - target: 7000
+        published: 7000
+        protocol: tcp
+        mode: host
+    configs:
+      - source: haproxy_cfg
+        target: /usr/local/etc/haproxy/haproxy.cfg
+    deploy:
+      replicas: 2
+      placement:
+        constraints: ["node.labels.pg == 1"]
+      restart_policy:
+        condition: on-failure

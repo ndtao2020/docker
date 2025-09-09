@@ -1,9 +1,11 @@
-# version: '3.9'
+version: '3.9'
+
 # https://github.com/bitnami/containers/tree/main/bitnami/postgresql-repmgr#environment-variables
 # https://hub.docker.com/r/bitnami/postgresql-repmgr
 # step 1: docker network create -d overlay --attachable pg-repmgr-network
-# step 2: env $(cat .env | xargs) docker stack deploy -c docker-compose.yml pg-repmgr-cluster
-# step 3: docker service update pg-repmgr-cluster_pgbouncer --publish-add 5432:6432
+# step 2: env $(grep -v '^#' .env | xargs) docker stack deploy --compose-file docker-compose.yml pg-repmgr-cluster
+# step 3: docker service update pg-repmgr-cluster_pgdog --publish-add 5432:6432
+# step 4: docker service rm $(docker service ls -q)
 
 services:
   pg-1:
@@ -36,7 +38,6 @@ services:
     volumes:
       # chmod -R 777 ./conf-1
       - postgres_1_data:/bitnami/postgresql:rw
-      - postgres_backups:/backups:rw
     networks:
       - pg-repmgr-network
     restart: unless-stopped
@@ -49,6 +50,7 @@ services:
     deploy:
       replicas: 1
       placement:
+        # constraints: [node.role == manager]
         constraints:
           - node.labels.postgresql.role == primary
       restart_policy:
@@ -101,9 +103,9 @@ services:
     #   start_period: 90s
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.labels.postgresql.role == replica
+      # placement:
+      #   constraints:
+      #     - node.labels.postgresql.role == replica
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -154,10 +156,9 @@ services:
     #   start_period: 90s
     deploy:
       replicas: 1
-      placement:
-        constraints:
-          - node.labels.postgresql.role == replica
-      #     - node.labels.az != zone-a
+      # placement:
+      #   constraints:
+      #     - node.labels.postgresql.role == replica
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -169,6 +170,8 @@ services:
       #   reservations:
       #     memory: 2G
       #     cpus: '1'
+
+  # --------------------- (proxy + pooler) ---------------------
 
   pgbouncer:
     image: bitnami/pgbouncer:latest
@@ -211,6 +214,30 @@ services:
       #     memory: 512M
       #     cpus: '0.5'
 
+  # pgdog:
+  #   image: ghcr.io/pgdogdev/pgdog:v0.1.3
+  #   # command: ["-u", "/pgdog/users.toml"]
+  #   environment:
+  #     RUST_LOG: debug
+  #   volumes:
+  #     - pgdog_configs:/pgdog
+  #   networks:
+  #     - pg-repmgr-network
+  #   depends_on:
+  #     - pg-1
+  #     - pg-2
+  #     - pg-3
+  #   restart: unless-stopped
+  #   deploy:
+  #     replicas: 2
+  #     placement:
+  #       constraints:
+  #         - node.role != worker
+  #     # resources:
+  #     #   limits:
+  #     #     memory: 512M
+  #     #     cpus: '0.5'
+
 volumes:
   postgres_1_data:
     # driver: local
@@ -233,21 +260,72 @@ volumes:
       o: "addr=127.0.0.1,nfsvers=4" # Replace localhost with your server's IP
       device: ":/home/teo/nfs/postgres-repmgr-network/pg-3"
   
-  postgres_backups:
+  pgdog_configs:
     # driver: local
     driver_opts:
       type: "nfs"
       o: "addr=127.0.0.1,nfsvers=4" # Replace localhost with your server's IP
-      device: ":/home/teo/nfs/postgres-repmgr-network/backups"
-
-# configs:
-#   postgresql_conf:
-#     file: ./config/postgresql.conf
-#   repmgr_conf:
-#     file: ./config/repmgr.conf
+      device: ":/home/teo/nfs/postgres-repmgr-network/pgdog"
 
 networks:
   pg-repmgr-network:
     external: true
     # driver: overlay # Or bridge, depending on your setup
     # attachable: true
+
+# configs:
+#   postgresql_conf:
+#     file: ./config/postgresql.conf
+#   repmgr_conf:
+#     file: ./config/repmgr.conf
+  # pgdog-config-toml:
+  #   content: |
+  #     [general]
+  #     default_pool_size = 10
+  #     min_pool_size = 0
+  #     pooler_mode = "transaction"
+  #     workers = 0
+
+  #     [admin]
+  #     name = "admin"
+  #     user = "admin"
+  #     password = "admin"
+
+  #     [[databases]]
+  #     name = "pg-1"
+  #     host = "pg-1"
+  #     port = ${POSTGRES_PORT:-5432}
+  #     database_name = "${POSTGRES_DB}"
+  #     shard = 0
+
+  #     [[databases]]
+  #     name = "pg-2"
+  #     host = "pg-2"
+  #     port = ${POSTGRES_PORT:-5432}
+  #     database_name = "${POSTGRES_DB}"
+  #     shard = 0
+
+  #     [[databases]]
+  #     name = "pg-3"
+  #     host = "pg-3"
+  #     port = ${POSTGRES_PORT:-5432}
+  #     database_name = "${POSTGRES_DB}"
+  #     role = "replica"
+  #     shard = 0
+
+  # pgdog-users-toml:
+  #   content: |
+  #     [[users]]
+  #     name = "pg-1"
+  #     password = "${POSTGRES_PASSWORD}"
+  #     database = "${POSTGRES_DB}"
+
+  #     [[users]]
+  #     name = "pg-2"
+  #     password = "${POSTGRES_PASSWORD}"
+  #     database = "${POSTGRES_DB}"
+
+  #     [[users]]
+  #     name = "pg-3"
+  #     password = "${POSTGRES_PASSWORD}"
+  #     database = "${POSTGRES_DB}"

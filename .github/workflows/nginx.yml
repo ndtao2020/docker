@@ -234,7 +234,7 @@ jobs:
             ENABLED_MODULES=${{ vars.ENABLED_MODULES }}
             NGINX_FROM_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:base-alpine
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ steps.nginx.outputs.version }}-alpine
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ needs.nginx-versions.outputs.mainline-version }}-alpine
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:alpine
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}
           target: "${{ matrix.images.target }}"

@@ -92,7 +92,9 @@ jobs:
           platforms: ${{ vars.PLATFORMS_DEBIAN }}
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:base-debian
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ needs.nginx-versions.outputs.version }}-base-debian
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:base-debian
           target: "${{ matrix.images.target }}"
 
       # Verify build
@@ -137,9 +139,7 @@ jobs:
           build-args: |
             ENABLED_MODULES=${{ vars.ENABLED_MODULES }}
             NGINX_FROM_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:base-debian
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ needs.nginx-versions.outputs.version }}-debian
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:debian
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:debian
           target: "${{ matrix.images.target }}"
 
       # Verify build
@@ -183,7 +183,9 @@ jobs:
           platforms: ${{ vars.PLATFORMS_ALPINE }}
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:base-alpine
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ needs.nginx-versions.outputs.version }}-base-alpine
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:base-alpine
           target: "${{ matrix.images.target }}"
       # Verify build
       - name: Verify
@@ -228,7 +230,6 @@ jobs:
             ENABLED_MODULES=${{ vars.ENABLED_MODULES }}
             NGINX_FROM_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:base-alpine
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:${{ needs.nginx-versions.outputs.version }}-alpine
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}:alpine
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKERHUB_REPOSITORY_NAME }}
           target: "${{ matrix.images.target }}"
